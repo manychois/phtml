@@ -1,0 +1,17 @@
+{
+    "name": "spchoi4/php_tailwind",
+    "autoload": {
+        "psr-4": {
+            "Manychois\\Phtml\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Siu Pang Tommy Choi",
+            "email": "manychois@manychois.com.au"
+        }
+    ],
+    "require": {
+        "php": ">=8.4"
+    }
+}
