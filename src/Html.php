@@ -5,6 +5,8 @@ namespace Manychois\Phtml;
 use Dom\Element;
 use Dom\HTMLDocument;
 use Dom\Node;
+use Dom\ParentNode;
+use Generator;
 
 class Html
 {
@@ -40,5 +42,17 @@ class Html
             return $node;
         }
         throw new \RuntimeException('Expected an Element');
+    }
+
+    public function traverse(Node $node, bool $includeSelf = false): Generator
+    {
+        if ($includeSelf) {
+            yield $node;
+        }
+        if ($node instanceof ParentNode) {
+            foreach ($node->childNodes as $child) {
+                yield from $this->traverse($child, true);
+            }
+        }
     }
 }

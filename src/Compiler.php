@@ -21,19 +21,32 @@ class Compiler
     public function compile(string $templateName, mixed $data): string
     {
         $templateFile = $this->findTemplateFile($templateName);
-        if (\str_ends_with($templateFile, '.php')) {
+        require_once $templateFile;
+        $templateClass = $this->getFullClassName($templateFile);
+        $template = new $templateClass();
+        \assert($template instanceof AbstractTemplate);
+
+        $templateChain = [$template];
+        while ($template->parent() !== '') {
+            $templateFile = $this->findTemplateFile($template->parent());
             require_once $templateFile;
             $templateClass = $this->getFullClassName($templateFile);
             $template = new $templateClass();
             \assert($template instanceof AbstractTemplate);
+            $templateChain[] = $template;
+        }
+        $templateChain = \array_reverse($templateChain);
 
-            $doc = HTMLDocument::createEmpty();
-            $doctype = $doc->implementation->createDocumentType('html', '', '');
-            $doctype = $doc->importNode($doctype, true);
-            $doc->appendChild($doctype);
+        $doc = HTMLDocument::createEmpty();
+        $doctype = $doc->implementation->createDocumentType('html', '', '');
+        $doctype = $doc->importNode($doctype, true);
+        $doc->appendChild($doctype);
 
-            $content = $template->content($doc, $data);
-            if ($content !== null) {
+        $templateCount = \count($templateChain);
+        for ($i = 0; $i < $templateCount; ++$i) {
+            $template = $templateChain[$i];
+            if ($i === 0) {
+                $content = $template->content($doc, $data);
                 if ($content instanceof Element || $content instanceof Comment) {
                     $doc->appendChild($content);
                 } elseif ($content instanceof DocumentFragment) {
@@ -43,10 +56,31 @@ class Compiler
                         }
                     }
                 }
+            } else {
+                $phpBody = $doc->querySelector('php-body');
+                if ($phpBody !== null) {
+                    $content = $template->content($doc, $data);
+                    $phpBody->replaceWith($content);
+                }
             }
-        } else {
-            $doc = HTMLDocument::createFromFile($templateFile);
         }
+        // clear unresolved php-body, php-region
+        do {
+            $phpBody = $doc->querySelector('php-body');
+            if ($phpBody !== null) {
+                $temp = $doc->createDocumentFragment();
+                $temp->append(...$phpBody->childNodes);
+                $phpBody->replaceWith($temp);
+            }
+        } while ($phpBody !== null);
+        do {
+            $phpRegion = $doc->querySelector('php-region');
+            if ($phpRegion !== null) {
+                $temp = $doc->createDocumentFragment();
+                $temp->append(...$phpRegion->childNodes);
+                $phpRegion->replaceWith($temp);
+            }
+        } while ($phpRegion !== null);
 
         do {
             $rescan = false;
@@ -68,7 +102,7 @@ class Compiler
         return $doc->saveHTML();
     }
 
-    public function findTemplateFile(string $templateName): string
+    private function findTemplateFile(string $templateName): string
     {
         $toCheck = $this->config->templateDir . '/' . $templateName . '.php';
         if (\file_exists($toCheck)) {
@@ -79,11 +113,6 @@ class Compiler
             return \str_replace('-', '', \ucwords($matches[0]));
         }, $templateName);
         $toCheck = $this->config->templateDir . '/' . $uc . '.php';
-        if (\file_exists($toCheck)) {
-            return $toCheck;
-        }
-
-        $toCheck = $this->config->templateDir . '/' . $templateName . '.html';
         if (\file_exists($toCheck)) {
             return $toCheck;
         }
