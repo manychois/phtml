@@ -25,9 +25,6 @@ abstract class AbstractView
     public ?self $parent = null;
     public ?self $child = null;
     protected HTMLDocument $document;
-    protected HtmlElementHelper $html;
-    protected SvgElementHelper $svg;
-    protected MathmlElementHelper $mathml;
     protected ViewData $viewData;
 
     #endregion
@@ -82,15 +79,42 @@ abstract class AbstractView
     {
         $this->document = $doc;
         $this->viewData = $viewData;
-        $this->html = new HtmlElementHelper($doc);
-        $this->svg = new SvgElementHelper($doc);
-        $this->mathml = new MathmlElementHelper($doc);
         $this->child = $childView;
         if ($childView === null) {
             return;
         }
 
         $childView->parent = $this;
+    }
+
+    /**
+     * Gets a helper for creating HTML elements.
+     *
+     * @return HtmlElementHelper The HTML element helper.
+     */
+    final protected function html(): HtmlElementHelper
+    {
+        return new HtmlElementHelper($this->document);
+    }
+
+    /**
+     * Gets a helper for creating SVG elements.
+     *
+     * @return SvgElementHelper The SVG element helper.
+     */
+    final protected function svg(): SvgElementHelper
+    {
+        return new SvgElementHelper($this->document);
+    }
+
+    /**
+     * Gets a helper for creating MathML elements.
+     *
+     * @return MathmlElementHelper The MathML element helper.
+     */
+    final protected function mathml(): MathmlElementHelper
+    {
+        return new MathmlElementHelper($this->document);
     }
 
     /**
@@ -118,7 +142,7 @@ abstract class AbstractView
             $result = $default->call($this);
             if (
                 $result !== null && !\is_string($result) && !($result instanceof Node)
-                    && !\is_iterable($result) && !($result instanceof Closure)
+                && !\is_iterable($result) && !($result instanceof Closure)
             ) {
                 throw new TypeError(
                     \sprintf('Invalid default content. Found type: %s', \get_debug_type($result))
