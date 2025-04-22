@@ -1,5 +1,5 @@
 {
-  "name": "spchoi4/php_tailwind",
+  "name": "manychois/phtml",
   "autoload": {
     "psr-4": {
       "Manychois\\Phtml\\": "src/"
