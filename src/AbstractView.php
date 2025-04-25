@@ -24,7 +24,7 @@ abstract class AbstractView
 
     public ?self $parent = null;
     public ?self $child = null;
-    protected HTMLDocument $document;
+    public HTMLDocument $document;
     protected ViewData $viewData;
 
     #endregion
@@ -94,7 +94,7 @@ abstract class AbstractView
      */
     final protected function html(): HtmlElementHelper
     {
-        return new HtmlElementHelper($this->document);
+        return new HtmlElementHelper($this);
     }
 
     /**
@@ -104,7 +104,7 @@ abstract class AbstractView
      */
     final protected function svg(): SvgElementHelper
     {
-        return new SvgElementHelper($this->document);
+        return new SvgElementHelper($this);
     }
 
     /**
@@ -114,7 +114,7 @@ abstract class AbstractView
      */
     final protected function mathml(): MathmlElementHelper
     {
-        return new MathmlElementHelper($this->document);
+        return new MathmlElementHelper($this);
     }
 
     /**

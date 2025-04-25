@@ -12,6 +12,7 @@ use Dom\Node;
 use Dom\ParentNode;
 use Dom\Text;
 use Generator;
+use Manychois\Phtml\AbstractView;
 
 /**
  * Helper class for creating elements.
@@ -20,16 +21,16 @@ use Generator;
  */
 abstract class AbstractElementHelper
 {
-    public readonly HTMLDocument $ownerDocument;
+    private readonly AbstractView $view;
 
     /**
      * Initializes a new instance of a tag helper.
      *
-     * @param HTMLDocument $ownerDocument The owner document.
+     * @param AbstractView $view The view instance this helper attached to.
      */
-    public function __construct(HTMLDocument $ownerDocument)
+    public function __construct(AbstractView $view)
     {
-        $this->ownerDocument = $ownerDocument;
+        $this->view = $view;
     }
 
     /**
@@ -61,7 +62,7 @@ abstract class AbstractElementHelper
     {
         $element = $this->createElement($context);
         $element->innerHTML = $html;
-        $fragment = $this->ownerDocument->createDocumentFragment();
+        $fragment = $this->view->document->createDocumentFragment();
         while ($element->hasChildNodes()) {
             $node = $element->firstChild;
             \assert($node !== null);
@@ -86,7 +87,7 @@ abstract class AbstractElementHelper
             $node = $doc->firstChild;
             \assert($node !== null);
             $doc->removeChild($node);
-            $node = $this->ownerDocument->importNode($node, true);
+            $node = $this->view->document->importNode($node, true);
 
             yield $node;
         }
@@ -111,9 +112,9 @@ abstract class AbstractElementHelper
         string|Node|iterable|Closure|null $inner = null
     ): Element {
         if ($namespaceUri === null) {
-            $element = $this->ownerDocument->createElement($tag);
+            $element = $this->view->document->createElement($tag);
         } else {
-            $element = $this->ownerDocument->createElementNS($namespaceUri, $tag);
+            $element = $this->view->document->createElementNS($namespaceUri, $tag);
         }
         foreach ($attrs as $name => $value) {
             if ($value === null || $value === false) {
@@ -151,7 +152,7 @@ abstract class AbstractElementHelper
                 return;
             }
 
-            $inner = $this->ownerDocument->createTextNode($inner);
+            $inner = $this->view->document->createTextNode($inner);
             $parent->append($inner);
 
             return;
@@ -174,7 +175,7 @@ abstract class AbstractElementHelper
         /**
          * @var string|Node|iterable<string|Node|Closure|null>|Closure|null $result
          */
-        $result = $inner->call($this);
+        $result = $inner->call($this->view, $this);
         $this->append($parent, $result);
     }
 }
