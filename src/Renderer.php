@@ -48,7 +48,9 @@ class Renderer
         foreach ($view->render() as $node) {
             $doc->appendChild($node);
         }
-
+        foreach ($hierarchy as $v) {
+            $v->postProcessDocument();
+        }
         foreach ($hierarchy as $v) {
             $v->parent = null;
             $v->child = null;

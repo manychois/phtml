@@ -92,7 +92,7 @@ abstract class AbstractView
      *
      * @return HtmlElementHelper The HTML element helper.
      */
-    final protected function html(): HtmlElementHelper
+    final public function html(): HtmlElementHelper
     {
         return new HtmlElementHelper($this);
     }
@@ -102,7 +102,7 @@ abstract class AbstractView
      *
      * @return SvgElementHelper The SVG element helper.
      */
-    final protected function svg(): SvgElementHelper
+    final public function svg(): SvgElementHelper
     {
         return new SvgElementHelper($this);
     }
@@ -112,7 +112,7 @@ abstract class AbstractView
      *
      * @return MathmlElementHelper The MathML element helper.
      */
-    final protected function mathml(): MathmlElementHelper
+    final public function mathml(): MathmlElementHelper
     {
         return new MathmlElementHelper($this);
     }
@@ -181,5 +181,13 @@ abstract class AbstractView
     public function renderRegion(string $name): Generator
     {
         yield from [];
+    }
+
+    /**
+     * Processes the document after rendering.
+     */
+    public function postProcessDocument(): void
+    {
+        // do nothing
     }
 }
