@@ -184,9 +184,17 @@ abstract class AbstractView
     }
 
     /**
-     * Processes the document after rendering.
+     * This method is called before the view is rendered.
      */
-    public function postProcessDocument(): void
+    public function preRender(): void
+    {
+        // do nothing
+    }
+
+    /**
+     * This method is called after the view has been rendered.
+     */
+    public function postRender(): void
     {
         // do nothing
     }

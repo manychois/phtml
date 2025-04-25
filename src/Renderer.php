@@ -45,11 +45,14 @@ class Renderer
             \array_unshift($hierarchy, $view);
             $parentName = $view->getParentName();
         }
+        foreach (\array_reverse($hierarchy) as $v) {
+            $v->preRender();
+        }
         foreach ($view->render() as $node) {
             $doc->appendChild($node);
         }
         foreach ($hierarchy as $v) {
-            $v->postProcessDocument();
+            $v->postRender();
         }
         foreach ($hierarchy as $v) {
             $v->parent = null;
