@@ -1,3 +1,4 @@
-examples/
-vendor/
-playground.php
+/coverage/
+/dev/
+/vendor/
+/*.cache
