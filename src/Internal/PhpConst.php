@@ -35,7 +35,9 @@ final class PhpConst extends AbstractPhpNode
         $view = new View($viewName, $this->viewEngine, $fragment);
 
         foreach ($target->attrs() as $name => $value) {
-            $data[$name] = $this->viewEngine->evaluateExpr($value, $data);
+            $nameParts = explode('-', $name);
+            $phpVarName = lcfirst(implode('', array_map('ucfirst', $nameParts)));
+            $data[$phpVarName] = $this->viewEngine->evaluateExpr($value, $data);
         }
         $rendered = $view->render($data, null);
         $target->replaceWith($rendered);
