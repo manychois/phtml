@@ -20,13 +20,12 @@
   ],
   "require": {
     "php": "^8.4",
-    "manychois/peval": "dev-dev",
-    "manychois/simdom": "dev-reboot-v0.3"
+    "manychois/simdom": "^0.3.1"
   },
   "require-dev": {
-    "friendsofphp/php-cs-fixer": "^3.75",
-    "phpstan/phpstan": "^2.1",
-    "phpunit/phpunit": "^12.2"
+    "friendsofphp/php-cs-fixer": "^3.88.2",
+    "phpstan/phpstan": "^2.1.29",
+    "phpunit/phpunit": "^12.3.14"
   },
   "scripts": {
     "code": [
