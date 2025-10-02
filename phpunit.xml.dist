@@ -4,7 +4,7 @@
   bootstrap="vendor/autoload.php"
   colors="true">
   <testsuites>
-    <testsuite name="Peval Test Suite">
+    <testsuite name="Phtml Test Suite">
       <directory>./tests</directory>
     </testsuite>
   </testsuites>
