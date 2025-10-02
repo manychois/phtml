@@ -6,19 +6,19 @@ namespace Manychois\Phtml\Internal;
 
 final class StringUtility
 {
-    public static function kebabToCamel(string $str): string
+    public static function slugToCamel(string $str): string
     {
         return lcfirst(implode(array_map('ucfirst', explode('-', $str))));
     }
 
     public static function toPascal(string $str): string
     {
-        $kebab = self::toKebabCase($str);
+        $kebab = self::slugify($str);
 
-        return ucfirst(self::kebabToCamel($kebab));
+        return ucfirst(self::slugToCamel($kebab));
     }
 
-    public static function toKebabCase(string $str): string
+    public static function slugify(string $str): string
     {
         $temp = preg_replace('/([a-z])([A-Z])/', '$1-$2', $str);
         assert(is_string($temp));

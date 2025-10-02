@@ -249,7 +249,7 @@ class ViewParser
             if (str_starts_with($key, '$')) {
                 continue;
             }
-            $key = StringUtility::kebabToCamel($key);
+            $key = StringUtility::slugToCamel($key);
 
             if ('' === $value) {
                 yield $indent . sprintf('%s[%s] = \'\';', $viewPropsVar, $this->toPhpLiteral($key));
@@ -286,7 +286,7 @@ class ViewParser
             if (!str_starts_with($key, '$')) {
                 continue;
             }
-            $key = $key = StringUtility::kebabToCamel(substr($key, 1));
+            $key = $key = StringUtility::slugToCamel(substr($key, 1));
             $expr = trim($value);
             yield $indent . sprintf('%s[%s] = %s;', $viewPropsVar, $this->toPhpLiteral($key), $expr);
             unset($attrs[$key]);
