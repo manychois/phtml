@@ -7,6 +7,7 @@ namespace Manychois\Phtml;
 use Manychois\Phtml\Internal\ViewLookup;
 use Manychois\Phtml\Internal\ViewParser;
 use Manychois\Simdom\Document;
+use Psr\Container\ContainerInterface;
 use RuntimeException;
 
 use function Manychois\Simdom\append;
@@ -18,16 +19,18 @@ class ViewEngine
     public readonly string $compiledDir;
     private readonly ViewLookup $viewLookup;
     public readonly bool $isDev;
+    private readonly ?ContainerInterface $container;
     /**
      * @var string[]
      */
     private array $viewSourceDirectories = [];
 
-    public function __construct(string $baseDir, string $compiledDir, bool $isDev = true)
+    public function __construct(string $baseDir, string $compiledDir, ?ContainerInterface $container = null, bool $isDev = true)
     {
         $this->baseDir = $baseDir;
         $this->compiledDir = $compiledDir;
         $this->isDev = $isDev;
+        $this->container = $container;
 
         if (!is_dir($compiledDir)) {
             mkdir($compiledDir, 0o777, true);
@@ -76,10 +79,8 @@ class ViewEngine
             } else {
                 require_once $this->compiledDir . '/' . $oldCompiled;
             }
-            $instance = new $oldClass($this);
-            assert($instance instanceof AbstractView);
 
-            return $instance;
+            return $this->instantiateView($oldClass);
         }
 
         $newSource = $this->findViewSource($viewName);
@@ -102,10 +103,8 @@ class ViewEngine
             $newHash = md5($rawContent);
             if ($newSource === $oldSource && $oldHash === $newHash) {
                 require_once $this->compiledDir . '/' . $oldCompiled;
-                $instance = new $oldClass($this);
-                assert($instance instanceof AbstractView);
 
-                return $instance;
+                return $this->instantiateView($oldClass);
             }
 
             $newCompiled = sprintf('%s.php', $viewName);
@@ -115,10 +114,8 @@ class ViewEngine
         }
 
         $this->viewLookup->export($this->compiledDir . '/' . self::VIEW_LOOKUP_FILENAME);
-        $instance = new $newClass($this);
-        assert($instance instanceof AbstractView);
 
-        return $instance;
+        return $this->instantiateView($newClass);
     }
 
     private function findViewSource(string $viewName): string
@@ -204,5 +201,17 @@ class ViewEngine
         }
 
         return [$namespace, $class];
+    }
+
+    private function instantiateView(string $className): AbstractView
+    {
+        if (null === $this->container) {
+            $instance = new $className($this);
+        } else {
+            $instance = $this->container->get($className);
+        }
+        assert($instance instanceof AbstractView);
+
+        return $instance;
     }
 }
