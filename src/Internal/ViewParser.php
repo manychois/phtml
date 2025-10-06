@@ -46,15 +46,18 @@ class ViewParser
         $fragment = $htmlParser->parseFragment($source);
         foreach ($fragment->descendants() as $child) {
             if ($child instanceof Text) {
-                $child->data = trim($child->data);
-                if ('' === $child->data) {
-                    $child->remove();
+                if (trim($child->data) === '') {
+                    if (str_contains($child->data, "\n")) {
+                        $child->data = "\n";
+                    } else {
+                        $child->data = ' ';
+                    }
                 }
             }
         }
 
         $lines = [];
-        foreach ($this->codeChildNodes($fragment, '        ', '', '$props', '$regions') as $line) {
+        foreach ($this->codeChildNodes($fragment, '        ', '', '$props', '$main', '$regions') as $line) {
             $lines[] = $line;
         }
 
@@ -75,12 +78,9 @@ class ViewParser
 
             final class %s extends \%s
             {
-                public function render(array $props = [], mixed $mainContent = null, array $regions = []): Generator
+                public function render(array $props = [], mixed $main = null, array $regions = []): Generator
                 {
                     extract($props, \EXTR_SKIP);
-                    if (null !== $mainContent) {
-                        $regions[''] = $mainContent;
-                    }
             %s
                 }
             }
@@ -93,32 +93,32 @@ class ViewParser
         return '\Manychois\Phtml\Internal\Compiled\\' . $className;
     }
 
-    private function codeChildNodes(AbstractParentNode $parent, string $indent, string $parentVar, string $propsVar, string $regionsVar): Generator
+    private function codeChildNodes(AbstractParentNode $parent, string $indent, string $parentVar, string $propsVar, string $mainVar, string $regionsVar): Generator
     {
         $node = $parent->firstChild;
         while (null !== $node) {
-            yield from $this->codeNode($node, $indent, $parentVar, $propsVar, $regionsVar);
+            yield from $this->codeNode($node, $indent, $parentVar, $propsVar, $mainVar, $regionsVar);
             $node = $node->nextSibling;
         }
     }
 
-    private function codeNode(AbstractNode $node, string $indent, string $parentVar, string $propsVar, string $regionsVar): Generator
+    private function codeNode(AbstractNode $node, string $indent, string $parentVar, string $propsVar, string $mainVar, string $regionsVar): Generator
     {
         if ($node instanceof Element) {
-            yield from $this->codeElement($node, $indent, $parentVar, $propsVar, $regionsVar);
+            yield from $this->codeElement($node, $indent, $parentVar, $propsVar, $mainVar, $regionsVar);
         }
         if ($node instanceof Text) {
-            yield from $this->codeText($node, $indent, $parentVar, $propsVar, $regionsVar);
+            yield from $this->codeText($node, $indent, $parentVar, $propsVar, $mainVar, $regionsVar);
         }
         if ($node instanceof Comment) {
-            yield from $this->codeComment($node, $indent, $parentVar, $propsVar, $regionsVar);
+            yield from $this->codeComment($node, $indent, $parentVar, $propsVar, $mainVar, $regionsVar);
         }
         if ($node instanceof Doctype) {
-            yield from $this->codeDoctype($node, $indent, $parentVar, $propsVar, $regionsVar);
+            yield from $this->codeDoctype($node, $indent, $parentVar, $propsVar, $mainVar, $regionsVar);
         }
     }
 
-    private function codeDoctype(Doctype $doctype, string $indent, string $parentVar, string $propsVar, string $regionsVar): Generator
+    private function codeDoctype(Doctype $doctype, string $indent, string $parentVar, string $propsVar, string $mainVar, string $regionsVar): Generator
     {
         $code = sprintf(
             'Doctype::𝑖𝑛𝑡𝑒𝑟𝑛𝑎𝑙Create(%s, %s, %s);',
@@ -133,7 +133,7 @@ class ViewParser
         }
     }
 
-    private function codeComment(Comment $comment, string $indent, string $parentVar, string $propsVar, string $regionsVar): Generator
+    private function codeComment(Comment $comment, string $indent, string $parentVar, string $propsVar, string $mainVar, string $regionsVar): Generator
     {
         $code = sprintf(
             'Comment::𝑖𝑛𝑡𝑒𝑟𝑛𝑎𝑙Create(%s)',
@@ -146,31 +146,31 @@ class ViewParser
         }
     }
 
-    private function codeElement(Element $element, string $indent, string $parentVar, string $propsVar, string $regionsVar): Generator
+    private function codeElement(Element $element, string $indent, string $parentVar, string $propsVar, string $mainVar, string $regionsVar): Generator
     {
         if ($element->hasAttr('php-foreach')) {
-            yield from $this->codeForeachElement($element, $indent, $parentVar, $propsVar, $regionsVar);
+            yield from $this->codeForeachElement($element, $indent, $parentVar, $propsVar, $mainVar, $regionsVar);
         } elseif ($element->hasAttr('php-if')) {
-            yield from $this->codeIfElement($element, $indent, $parentVar, $propsVar, $regionsVar);
+            yield from $this->codeIfElement($element, $indent, $parentVar, $propsVar, $mainVar, $regionsVar);
         } elseif ($element->hasAttr('php-else') || $element->hasAttr('php-elseif')) {
             throw new RuntimeException('php-else and php-elseif must be preceded by an element with php-if.');
         } elseif ('php-element' === $element->name) {
-            yield from $this->codePhpElement($element, $indent, $parentVar, $propsVar, $regionsVar);
+            yield from $this->codePhpElement($element, $indent, $parentVar, $propsVar, $mainVar, $regionsVar);
         } elseif ('php-view-in' === $element->name) {
-            yield from $this->codeViewInElement($element, $indent, $parentVar, $propsVar, $regionsVar);
+            yield from $this->codeViewInElement($element, $indent, $parentVar, $propsVar, $mainVar, $regionsVar);
         } elseif ('php-view-out' === $element->name) {
             // Handled in codeCustomElement
             throw new RuntimeException('php-view-out must be a child of a custom element.');
         } elseif ('php-var' === $element->name) {
-            yield from $this->codePhpVar($element, $indent, $parentVar, $propsVar, $regionsVar);
+            yield from $this->codePhpVar($element, $indent, $parentVar, $propsVar, $mainVar, $regionsVar);
         } elseif (str_contains($element->name, ':') || str_contains($element->name, '-') || str_contains($element->name, '_')) {
-            yield from $this->codeCustomElement($element, $indent, $parentVar, $propsVar, $regionsVar);
+            yield from $this->codeCustomElement($element, $indent, $parentVar, $propsVar, $mainVar, $regionsVar);
         } else {
-            yield from $this->codeOrdinaryElement($element, $indent, $parentVar, $propsVar, $regionsVar);
+            yield from $this->codeOrdinaryElement($element, $indent, $parentVar, $propsVar, $mainVar, $regionsVar);
         }
     }
 
-    private function codePhpVar(Element $element, string $indent, string $parentVar, string $propsVar, string $regionsVar): Generator
+    private function codePhpVar(Element $element, string $indent, string $parentVar, string $propsVar, string $mainVar, string $regionsVar): Generator
     {
         $oldPropsVar = $this->var('oldProps');
         yield $indent . sprintf('%s = [];', $oldPropsVar);
@@ -194,7 +194,7 @@ class ViewParser
             yield from $codeVar($key, $expr);
         }
 
-        yield from $this->codeChildNodes($element, $indent, $parentVar, $propsVar, $regionsVar);
+        yield from $this->codeChildNodes($element, $indent, $parentVar, $propsVar, $mainVar, $regionsVar);
 
         foreach ($attrs as $key => $value) {
             if (!str_starts_with($key, '$')) {
@@ -212,7 +212,7 @@ class ViewParser
         }
     }
 
-    private function codePhpElement(Element $element, string $indent, string $parentVar, string $propsVar, string $regionsVar): Generator
+    private function codePhpElement(Element $element, string $indent, string $parentVar, string $propsVar, string $mainVar, string $regionsVar): Generator
     {
         $elementVar = self::var('element');
         $elementNameVar = self::var('elementName');
@@ -226,14 +226,14 @@ class ViewParser
 
         yield $indent . sprintf('%s = %s === \'\' ? Fragment::create() : Element::create(%s);', $elementVar, $elementNameVar, $elementNameVar);
 
-        $attrCodes = \iterator_to_array($this->codeAttrs($element, $indent . '    ', $elementVar, $propsVar));
+        $attrCodes = \iterator_to_array($this->codeAttrs($element, $indent . '    ', $elementVar));
         if (count($attrCodes) > 0) {
             yield $indent . sprintf('if (%s !== \'\') {', $elementNameVar);
             yield from $attrCodes;
             yield $indent . '}';
         }
 
-        yield from $this->codeChildNodes($element, $indent, $elementVar, $propsVar, $regionsVar);
+        yield from $this->codeChildNodes($element, $indent, $elementVar, $propsVar, $mainVar, $regionsVar);
 
         if ('' === $parentVar) {
             $tempVar = self::var('temp');
@@ -245,11 +245,11 @@ class ViewParser
             yield $indent . '    ' . sprintf('yield %s;', $elementVar);
             yield $indent . '}';
         } else {
-            yield $indent . sprintf('$this->appendInner(%s, %s, %s, %s);', $parentVar, $elementVar, $propsVar, $regionsVar);
+            yield $indent . sprintf('$this->appendInner(%s, %s, %s, %s, %s);', $parentVar, $elementVar, $propsVar, $mainVar, $regionsVar);
         }
     }
 
-    private function codeForeachElement(Element $element, string $indent, string $parentVar, string $propsVar, string $regionsVar): Generator
+    private function codeForeachElement(Element $element, string $indent, string $parentVar, string $propsVar, string $mainVar, string $regionsVar): Generator
     {
         $foreachExpr = $element->getAttr('php-foreach') ?? '';
         if (1 !== \preg_match('/^(.+)\s+as\s+((\$\w+)\s*=>\s*)?(\$\w+)$/', trim($foreachExpr), $matches)) {
@@ -266,16 +266,16 @@ class ViewParser
         }
         yield $indent . sprintf('    %s[\'%s\'] = %s;', $loopPropsVar, substr($valueVar, 1), $valueVar);
         $element->removeAttr('php-foreach');
-        yield from $this->codeElement($element, $indent . '    ', $parentVar, $loopPropsVar, $regionsVar);
+        yield from $this->codeElement($element, $indent . '    ', $parentVar, $loopPropsVar, $mainVar, $regionsVar);
         yield $indent . '}';
     }
 
-    private function codeIfElement(Element $element, string $indent, string $parentVar, string $propsVar, string $regionsVar): Generator
+    private function codeIfElement(Element $element, string $indent, string $parentVar, string $propsVar, string $mainVar, string $regionsVar): Generator
     {
         $ifExpr = $element->getAttr('php-if');
         yield $indent . sprintf('if (%s) {', $ifExpr);
         $element->removeAttr('php-if');
-        yield from $this->codeElement($element, $indent . '    ', $parentVar, $propsVar, $regionsVar);
+        yield from $this->codeElement($element, $indent . '    ', $parentVar, $propsVar, $mainVar, $regionsVar);
 
         $next = $element->nextElementSibling;
         while (null !== $next && ($next->hasAttr('php-elseif') || $next->hasAttr('php-else'))) {
@@ -286,12 +286,12 @@ class ViewParser
                 $elseifExpr = $element->getAttr('php-elseif');
                 yield $indent . sprintf('} elseif (%s) {', $elseifExpr);
                 $element->removeAttr('php-elseif');
-                yield from $this->codeElement($element, $indent . '    ', $parentVar, $propsVar, $regionsVar);
+                yield from $this->codeElement($element, $indent . '    ', $parentVar, $propsVar, $mainVar, $regionsVar);
                 $element->remove();
             } else {
                 yield $indent . '} else {';
                 $element->removeAttr('php-else');
-                yield from $this->codeElement($element, $indent . '    ', $parentVar, $propsVar, $regionsVar);
+                yield from $this->codeElement($element, $indent . '    ', $parentVar, $propsVar, $mainVar, $regionsVar);
                 $element->remove();
                 break;
             }
@@ -300,7 +300,7 @@ class ViewParser
         yield $indent . '}';
     }
 
-    private function codeCustomElement(Element $element, string $indent, string $parentVar, string $propsVar, string $regionsVar): Generator
+    private function codeCustomElement(Element $element, string $indent, string $parentVar, string $propsVar, string $mainVar, string $regionsVar): Generator
     {
         $viewVar = self::var('view');
         $viewPropsVar = self::var('viewProps');
@@ -381,27 +381,40 @@ class ViewParser
             }
         }
 
+        $viewMainVar = $this->var('viewMain');
+        $hasViewMain = false;
         foreach ($regions as $name => $fragment) {
             if (0 === $fragment->childNodes->count()) {
                 continue;
             }
-            yield $indent . sprintf('%s[\'%s\'] = function (array $props, array $regions): Generator {', $viewRegionsVar, $name);
-            yield $indent . '    extract($props, \EXTR_SKIP);';
-            yield from $this->codeChildNodes($fragment, $indent . '    ', '', '$props', '$regions');
-            yield $indent . '};';
+            if ('' === $name) {
+                $hasViewMain = true;
+                yield $indent . sprintf('%s = function (array $props, mixed $main, array $regions): Generator {', $viewMainVar);
+                yield $indent . '    extract($props, \EXTR_SKIP);';
+                yield from $this->codeChildNodes($fragment, $indent . '    ', '', '$props', '$main', '$regions');
+                yield $indent . '};';
+            } else {
+                yield $indent . sprintf('%s[\'%s\'] = function (array $props, mixed $main, array $regions): Generator {', $viewRegionsVar, $name);
+                yield $indent . '    extract($props, \EXTR_SKIP);';
+                yield from $this->codeChildNodes($fragment, $indent . '    ', '', '$props', '$main', '$regions');
+                yield $indent . '};';
+            }
+        }
+        if (!$hasViewMain) {
+            yield $indent . sprintf('%s = null;', $viewMainVar);
         }
 
         if ('' === $parentVar) {
-            yield $indent . sprintf('yield from %s->render(%s, null, %s);', $viewVar, $viewPropsVar, $viewRegionsVar);
+            yield $indent . sprintf('yield from %s->render(%s, %s, %s);', $viewVar, $viewPropsVar, $viewMainVar, $viewRegionsVar);
         } else {
-            yield $indent . sprintf('$this->appendInner(%s, %s->render(%s, null, %s), %s, %s);', $parentVar, $viewVar, $viewPropsVar, $viewRegionsVar, $propsVar, $regionsVar);
+            yield $indent . sprintf('$this->appendInner(%s, %s->render(%s, %s, %s), %s, %s, %s);', $parentVar, $viewVar, $viewPropsVar, $viewMainVar, $viewRegionsVar, $propsVar, $mainVar, $regionsVar);
         }
     }
 
-    private function codeViewInElement(Element $element, string $indent, string $parentVar, string $propsVar, string $regionsVar): Generator
+    private function codeViewInElement(Element $element, string $indent, string $parentVar, string $propsVar, string $mainVar, string $regionsVar): Generator
     {
         $name = $element->getAttr('name') ?? '';
-        $code = sprintf('$this->renderRegion(%s, %s, %s)', $this->toPhpLiteral($name), $propsVar, $regionsVar);
+        $code = sprintf('$this->renderRegion(%s, %s, %s, %s)', $this->toPhpLiteral($name), $propsVar, $mainVar, $regionsVar);
         if ($element->childNodes->count() > 0) {
             $hasRegionVar = self::var('hasRegion');
             yield $indent . sprintf('%s = false;', $hasRegionVar);
@@ -416,18 +429,18 @@ class ViewParser
             yield $indent . '}';
 
             yield $indent . sprintf('if (!%s) {', $hasRegionVar);
-            yield from $this->codeChildNodes($element, $indent . '    ', $parentVar, $propsVar, $regionsVar);
+            yield from $this->codeChildNodes($element, $indent . '    ', $parentVar, $propsVar, $mainVar, $regionsVar);
             yield $indent . '}';
         } else {
             if ('' === $parentVar) {
                 yield $indent . sprintf('yield from %s;', $code);
             } else {
-                yield $indent . sprintf('$this->appendInner(%s, %s, %s, %s);', $parentVar, $code, $propsVar, $regionsVar);
+                yield $indent . sprintf('$this->appendInner(%s, %s, %s, %s, %s);', $parentVar, $code, $propsVar, $mainVar, $regionsVar);
             }
         }
     }
 
-    private function codeOrdinaryElement(Element $element, string $indent, string $parentVar, string $propsVar, string $regionsVar): Generator
+    private function codeOrdinaryElement(Element $element, string $indent, string $parentVar, string $propsVar, string $mainVar, string $regionsVar): Generator
     {
         $parts = \preg_split('/[^A-Za-z]+/', $element->name, -1, \PREG_SPLIT_NO_EMPTY);
         assert(false !== $parts);
@@ -436,9 +449,9 @@ class ViewParser
 
         yield $indent . sprintf('%s = Element::𝑖𝑛𝑡𝑒𝑟𝑛𝑎𝑙Create(%s);', $elementVar, $this->toPhpLiteral($element->name));
 
-        yield from $this->codeAttrs($element, $indent, $elementVar, $propsVar);
+        yield from $this->codeAttrs($element, $indent, $elementVar);
 
-        yield from $this->codeChildNodes($element, $indent, $elementVar, $propsVar, $regionsVar);
+        yield from $this->codeChildNodes($element, $indent, $elementVar, $propsVar, $mainVar, $regionsVar);
 
         if ('' === $parentVar) {
             yield $indent . sprintf('yield %s;', $elementVar);
@@ -447,7 +460,7 @@ class ViewParser
         }
     }
 
-    private function codeAttrs(Element $element, string $indent, string $elementVar, string $propsVar): Generator
+    private function codeAttrs(Element $element, string $indent, string $elementVar): Generator
     {
         $attrs = $element->attrs();
         foreach ($attrs as $key => $value) {
@@ -498,7 +511,7 @@ class ViewParser
         }
     }
 
-    private function codeText(Text $text, string $indent, string $parentVar, string $propsVar, string $regionsVar): Generator
+    private function codeText(Text $text, string $indent, string $parentVar, string $propsVar, string $mainVar, string $regionsVar): Generator
     {
         $data = $text->data;
         while ('' !== $data) {
@@ -523,7 +536,7 @@ class ViewParser
                 if ('' === $parentVar) {
                     yield $indent . sprintf('yield $this->resolveInner(%s, %s, %s);', $expr, $propsVar, $regionsVar);
                 } else {
-                    yield $indent . sprintf('$this->appendInner(%s, %s, %s, %s);', $parentVar, $expr, $propsVar, $regionsVar);
+                    yield $indent . sprintf('$this->appendInner(%s, %s, %s, %s, %s);', $parentVar, $expr, $propsVar, $mainVar, $regionsVar);
                 }
 
                 $data = substr($data, $pos + 2);

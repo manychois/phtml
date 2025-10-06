@@ -30,28 +30,28 @@ abstract class AbstractView
     /**
      * Render the view with the given properties and regions.
      *
-     * @param array<string,mixed> $props       The properties to pass to the view
-     * @param mixed               $mainContent The main content to pass to the view
-     * @param array<string,mixed> $regions     The regions contents to pass to the view
+     * @param array<string,mixed> $props   The properties to pass to the view
+     * @param mixed               $main    The main content to pass to the view
+     * @param array<string,mixed> $regions The regions contents to pass to the view
      *
      * @return Generator<int,AbstractNode>
      */
-    abstract public function render(array $props = [], mixed $mainContent = null, array $regions = []): Generator;
+    abstract public function render(array $props = [], mixed $main = null, array $regions = []): Generator;
 
     /**
      * Render the view and return as a single node.
      *
-     * @param array<string,mixed> $props       The properties to pass to the view
-     * @param mixed|null          $mainContent The main content to pass to the view
-     * @param array<string,mixed> $regions     The regions contents to pass to the view
+     * @param array<string,mixed> $props   The properties to pass to the view
+     * @param mixed|null          $main    The main content to pass to the view
+     * @param array<string,mixed> $regions The regions contents to pass to the view
      *
      * @throws InvalidArgumentException
      */
-    final public function renderAsNode(array $props = [], mixed $mainContent = null, array $regions = []): AbstractNode
+    final public function renderAsNode(array $props = [], mixed $main = null, array $regions = []): AbstractNode
     {
         $fragment = Fragment::create();
-        $result = $this->render($props, $mainContent, $regions);
-        $this->appendInner($fragment, $result, $props, $regions);
+        $result = $this->render($props, $main, $regions);
+        $this->appendInner($fragment, $result, $props, $main, $regions);
         if (1 === $fragment->childNodes->count()) {
             $onlyChild = $fragment->firstChild;
             assert(null !== $onlyChild);
@@ -85,15 +85,18 @@ abstract class AbstractView
      *
      * @param string              $name    The name of the region to render
      * @param array<string,mixed> $props   The properties to pass to the region
+     * @param mixed               $main    The main content to pass to the region
      * @param array<string,mixed> $regions The regions callables
      *
      * @return Generator<int,Doctype|Element|Text|Comment>
      */
-    final protected function renderRegion(string $name, array $props, array $regions): Generator
+    final protected function renderRegion(string $name, array $props, mixed $main, array $regions): Generator
     {
         if (isset($regions[$name])) {
             $region = $regions[$name];
-            yield from $this->resolveInner($region, $props, $regions);
+            yield from $this->resolveInner($region, $props, $main, $regions);
+        } elseif ('' === $name) {
+            yield from $this->resolveInner($main, $props, $main, $regions);
         }
     }
 
@@ -105,9 +108,9 @@ abstract class AbstractView
      * @param array<string,mixed> $props   The properties to pass to $value if it's a callable
      * @param array<string,mixed> $regions The regions callables to pass to $value if it's a callable
      */
-    final protected function appendInner(AbstractParentNode $parent, mixed $value, array $props, array $regions): void
+    final protected function appendInner(AbstractParentNode $parent, mixed $value, array $props, mixed $main, array $regions): void
     {
-        foreach ($this->resolveInner($value, $props, $regions) as $node) {
+        foreach ($this->resolveInner($value, $props, $main, $regions) as $node) {
             $parent->appendChild($node);
         }
     }
@@ -152,11 +155,12 @@ abstract class AbstractView
      *
      * @param mixed               $value   The value to resolve
      * @param array<string,mixed> $props   The properties to pass to $value if it's a callable
+     * @param mixed               $main    The main content to pass to $value if it's a callable
      * @param array<string,mixed> $regions The regions callables to pass to $value if it's a callable
      *
      * @return Generator<int,Doctype|Element|Text|Comment>
      */
-    private function resolveInner(mixed $value, array $props, array $regions): Generator
+    private function resolveInner(mixed $value, array $props, mixed $main, array $regions): Generator
     {
         if (null === $value) {
             return false;
@@ -189,7 +193,7 @@ abstract class AbstractView
             $i = 0;
             $hasContent = false;
             foreach ($value as $item) {
-                foreach ($this->resolveInner($item, $props, $regions) as $node) {
+                foreach ($this->resolveInner($item, $props, $main, $regions) as $node) {
                     yield $i => $node;
                     ++$i;
                     $hasContent = true;
@@ -200,8 +204,8 @@ abstract class AbstractView
         }
 
         if (is_callable($value)) {
-            $result = $value($props, $regions);
-            $generator = $this->resolveInner($result, $props, $regions);
+            $result = $value($props, $main, $regions);
+            $generator = $this->resolveInner($result, $props, $main, $regions);
             yield from $generator;
 
             return $generator->getReturn();
