@@ -480,8 +480,8 @@ class ViewParser
                     } else {
                         yield $indent . sprintf('$this->setAttrValue(%s, %s, %s, %s);', $elementVar, $this->toPhpLiteral($key), $this->toPhpLiteral($data), $isFirst ? 'false' : 'true');
                         $data = '';
-                        $isFirst = false;
                     }
+                    $isFirst = false;
                 }
             }
             unset($attrs[$key]);
