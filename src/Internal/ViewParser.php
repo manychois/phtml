@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Manychois\Phtml\Internal;
 
 use Generator;
+use Manychois\Phtml\ViewEngine;
 use Manychois\Simdom\AbstractNode;
 use Manychois\Simdom\AbstractParentNode;
 use Manychois\Simdom\Comment;
@@ -17,6 +18,7 @@ use RuntimeException;
 
 class ViewParser
 {
+    private readonly ViewEngine $engine;
     /**
      * @var array<string,int>
      */
@@ -32,11 +34,24 @@ class ViewParser
         return '$acv' . \ucfirst($prefix) . $id;
     }
 
+    public function __construct(ViewEngine $engine)
+    {
+        $this->engine = $engine;
+    }
+
     public function parse(string $viewName, string $source, string $filePath): string
     {
         $className = StringUtility::toPascal($viewName) . 'View';
         $htmlParser = new HtmlParser();
         $fragment = $htmlParser->parseFragment($source);
+        foreach ($fragment->descendants() as $child) {
+            if ($child instanceof Text) {
+                $child->data = trim($child->data);
+                if ('' === $child->data) {
+                    $child->remove();
+                }
+            }
+        }
 
         $lines = [];
         foreach ($this->codeChildNodes($fragment, '        ', '', '$props', '$regions') as $line) {
@@ -58,16 +73,20 @@ class ViewParser
             use Manychois\Simdom\Fragment;
             use Manychois\Simdom\Text;
 
-            final class %s extends AbstractCompiledView
+            final class %s extends \%s
             {
-                public function render(array $props = [], array $regions = []): Generator
+                public function render(array $props = [], mixed $mainContent = null, array $regions = []): Generator
                 {
                     extract($props, \EXTR_SKIP);
+                    if (null !== $mainContent) {
+                        $regions[''] = $mainContent;
+                    }
             %s
                 }
             }
             PHP;
-        $code = sprintf($code, $className, implode("\n", $lines));
+
+        $code = sprintf($code, $className, $this->engine->config->baseClass, implode("\n", $lines));
         file_put_contents($filePath, $code);
         require_once $filePath;
 
@@ -89,17 +108,17 @@ class ViewParser
             yield from $this->codeElement($node, $indent, $parentVar, $propsVar, $regionsVar);
         }
         if ($node instanceof Text) {
-            yield from $this->codeText($node, $indent, $parentVar, $propsVar);
+            yield from $this->codeText($node, $indent, $parentVar, $propsVar, $regionsVar);
         }
         if ($node instanceof Comment) {
-            yield from $this->codeComment($node, $indent, $parentVar, $propsVar);
+            yield from $this->codeComment($node, $indent, $parentVar, $propsVar, $regionsVar);
         }
         if ($node instanceof Doctype) {
-            yield from $this->codeDoctype($node, $indent, $parentVar, $propsVar);
+            yield from $this->codeDoctype($node, $indent, $parentVar, $propsVar, $regionsVar);
         }
     }
 
-    private function codeDoctype(Doctype $doctype, string $indent, string $parentVar, string $propsVar): Generator
+    private function codeDoctype(Doctype $doctype, string $indent, string $parentVar, string $propsVar, string $regionsVar): Generator
     {
         $code = sprintf(
             'Doctype::𝑖𝑛𝑡𝑒𝑟𝑛𝑎𝑙Create(%s, %s, %s);',
@@ -114,7 +133,7 @@ class ViewParser
         }
     }
 
-    private function codeComment(Comment $comment, string $indent, string $parentVar, string $propsVar): Generator
+    private function codeComment(Comment $comment, string $indent, string $parentVar, string $propsVar, string $regionsVar): Generator
     {
         $code = sprintf(
             'Comment::𝑖𝑛𝑡𝑒𝑟𝑛𝑎𝑙Create(%s)',
@@ -133,17 +152,63 @@ class ViewParser
             yield from $this->codeForeachElement($element, $indent, $parentVar, $propsVar, $regionsVar);
         } elseif ($element->hasAttr('php-if')) {
             yield from $this->codeIfElement($element, $indent, $parentVar, $propsVar, $regionsVar);
+        } elseif ($element->hasAttr('php-else') || $element->hasAttr('php-elseif')) {
+            throw new RuntimeException('php-else and php-elseif must be preceded by an element with php-if.');
         } elseif ('php-element' === $element->name) {
             yield from $this->codePhpElement($element, $indent, $parentVar, $propsVar, $regionsVar);
-        } elseif ('php:view-in' === $element->name) {
+        } elseif ('php-view-in' === $element->name) {
             yield from $this->codeViewInElement($element, $indent, $parentVar, $propsVar, $regionsVar);
-        } elseif ('php:view-out' === $element->name) {
+        } elseif ('php-view-out' === $element->name) {
             // Handled in codeCustomElement
-            throw new RuntimeException('php:view-out must be a child of a custom element.');
+            throw new RuntimeException('php-view-out must be a child of a custom element.');
+        } elseif ('php-var' === $element->name) {
+            yield from $this->codePhpVar($element, $indent, $parentVar, $propsVar, $regionsVar);
         } elseif (str_contains($element->name, ':') || str_contains($element->name, '-') || str_contains($element->name, '_')) {
-            yield from $this->codeCustomElement($element, $indent, $parentVar, $propsVar);
+            yield from $this->codeCustomElement($element, $indent, $parentVar, $propsVar, $regionsVar);
         } else {
             yield from $this->codeOrdinaryElement($element, $indent, $parentVar, $propsVar, $regionsVar);
+        }
+    }
+
+    private function codePhpVar(Element $element, string $indent, string $parentVar, string $propsVar, string $regionsVar): Generator
+    {
+        $oldPropsVar = $this->var('oldProps');
+        yield $indent . sprintf('%s = [];', $oldPropsVar);
+
+        $codeVar = function (string $key, string $value) use ($indent, $propsVar, $oldPropsVar): Generator {
+            $kl = $this->toPhpLiteral($key);
+            yield $indent . sprintf('if (array_key_exists(%s, %s)) {', $kl, $propsVar);
+            yield $indent . sprintf('    %s[%s] = %s[%s];', $oldPropsVar, $kl, $propsVar, $kl);
+            yield $indent . '}';
+            yield $indent . sprintf('%s[%s] = %s;', $propsVar, $kl, $value);
+            yield $indent . sprintf('$%s = %s;', $key, $value);
+        };
+
+        $attrs = $element->attrs();
+        foreach ($attrs as $key => $value) {
+            if (!str_starts_with($key, '$')) {
+                continue;
+            }
+            $key = StringUtility::slugToCamel(substr($key, 1));
+            $expr = trim($value);
+            yield from $codeVar($key, $expr);
+        }
+
+        yield from $this->codeChildNodes($element, $indent, $parentVar, $propsVar, $regionsVar);
+
+        foreach ($attrs as $key => $value) {
+            if (!str_starts_with($key, '$')) {
+                continue;
+            }
+            $key = StringUtility::slugToCamel(substr($key, 1));
+            $kl = $this->toPhpLiteral($key);
+            yield $indent . sprintf('if (array_key_exists(%s, %s)) {', $kl, $oldPropsVar);
+            yield $indent . sprintf('    %s[%s] = %s[%s];', $propsVar, $kl, $oldPropsVar, $kl);
+            yield $indent . sprintf('    $%s = %s[%s];', $key, $oldPropsVar, $kl);
+            yield $indent . '} else {';
+            yield $indent . sprintf('    unset(%s[%s]);', $propsVar, $kl);
+            yield $indent . sprintf('    unset($%s);', $key);
+            yield $indent . '}';
         }
     }
 
@@ -180,7 +245,7 @@ class ViewParser
             yield $indent . '    ' . sprintf('yield %s;', $elementVar);
             yield $indent . '}';
         } else {
-            yield $indent . sprintf('$this->appendInner(%s, %s);', $parentVar, $elementVar);
+            yield $indent . sprintf('$this->appendInner(%s, %s, %s, %s);', $parentVar, $elementVar, $propsVar, $regionsVar);
         }
     }
 
@@ -235,7 +300,7 @@ class ViewParser
         yield $indent . '}';
     }
 
-    private function codeCustomElement(Element $element, string $indent, string $parentVar, string $propsVar): Generator
+    private function codeCustomElement(Element $element, string $indent, string $parentVar, string $propsVar, string $regionsVar): Generator
     {
         $viewVar = self::var('view');
         $viewPropsVar = self::var('viewProps');
@@ -286,7 +351,7 @@ class ViewParser
             if (!str_starts_with($key, '$')) {
                 continue;
             }
-            $key = $key = StringUtility::slugToCamel(substr($key, 1));
+            $key = StringUtility::slugToCamel(substr($key, 1));
             $expr = trim($value);
             yield $indent . sprintf('%s[%s] = %s;', $viewPropsVar, $this->toPhpLiteral($key), $expr);
             unset($attrs[$key]);
@@ -300,7 +365,7 @@ class ViewParser
             }
 
             $regionName = '';
-            if ($child instanceof Element && 'php:view-out' === $child->name) {
+            if ($child instanceof Element && 'php-view-out' === $child->name) {
                 $regionName = $child->getAttr('name') ?? '';
                 if (!array_key_exists($regionName, $regions)) {
                     $regions[$regionName] = Fragment::create();
@@ -320,16 +385,16 @@ class ViewParser
             if (0 === $fragment->childNodes->count()) {
                 continue;
             }
-            yield $indent . sprintf('%s[\'%s\'] = function (array $props): Generator {', $viewRegionsVar, $name);
+            yield $indent . sprintf('%s[\'%s\'] = function (array $props, array $regions): Generator {', $viewRegionsVar, $name);
             yield $indent . '    extract($props, \EXTR_SKIP);';
-            yield from $this->codeChildNodes($fragment, $indent . '    ', '', '$props', '[]');
+            yield from $this->codeChildNodes($fragment, $indent . '    ', '', '$props', '$regions');
             yield $indent . '};';
         }
 
         if ('' === $parentVar) {
-            yield $indent . sprintf('yield from %s->render(%s, %s);', $viewVar, $viewPropsVar, $viewRegionsVar);
+            yield $indent . sprintf('yield from %s->render(%s, null, %s);', $viewVar, $viewPropsVar, $viewRegionsVar);
         } else {
-            yield $indent . sprintf('$this->appendInner(%s, %s->render(%s, %s));', $parentVar, $viewVar, $viewPropsVar, $viewRegionsVar);
+            yield $indent . sprintf('$this->appendInner(%s, %s->render(%s, null, %s), %s, %s);', $parentVar, $viewVar, $viewPropsVar, $viewRegionsVar, $propsVar, $regionsVar);
         }
     }
 
@@ -357,7 +422,7 @@ class ViewParser
             if ('' === $parentVar) {
                 yield $indent . sprintf('yield from %s;', $code);
             } else {
-                yield $indent . sprintf('$this->appendInner(%s, %s);', $parentVar, $code);
+                yield $indent . sprintf('$this->appendInner(%s, %s, %s, %s);', $parentVar, $code, $propsVar, $regionsVar);
             }
         }
     }
@@ -433,7 +498,7 @@ class ViewParser
         }
     }
 
-    private function codeText(Text $text, string $indent, string $parentVar, string $propsVar): Generator
+    private function codeText(Text $text, string $indent, string $parentVar, string $propsVar, string $regionsVar): Generator
     {
         $data = $text->data;
         while ('' !== $data) {
@@ -456,9 +521,9 @@ class ViewParser
                 assert(false !== $pos);
                 $expr = trim(substr($data, 0, $pos));
                 if ('' === $parentVar) {
-                    yield $indent . sprintf('yield $this->convertInner(%s);', $expr);
+                    yield $indent . sprintf('yield $this->resolveInner(%s, %s, %s);', $expr, $propsVar, $regionsVar);
                 } else {
-                    yield $indent . sprintf('$this->appendInner(%s, %s);', $parentVar, $expr);
+                    yield $indent . sprintf('$this->appendInner(%s, %s, %s, %s);', $parentVar, $expr, $propsVar, $regionsVar);
                 }
 
                 $data = substr($data, $pos + 2);

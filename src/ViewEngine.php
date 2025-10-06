@@ -7,7 +7,6 @@ namespace Manychois\Phtml;
 use Manychois\Phtml\Internal\ViewLookup;
 use Manychois\Phtml\Internal\ViewParser;
 use Manychois\Simdom\Document;
-use Psr\Container\ContainerInterface;
 use RuntimeException;
 
 use function Manychois\Simdom\append;
@@ -15,28 +14,21 @@ use function Manychois\Simdom\append;
 class ViewEngine
 {
     private const string VIEW_LOOKUP_FILENAME = 'phtml_view_lookup_array.php';
-    public readonly string $baseDir;
-    public readonly string $compiledDir;
+    public readonly Config $config;
     private readonly ViewLookup $viewLookup;
-    public readonly bool $isDev;
-    private readonly ?ContainerInterface $container;
     /**
      * @var string[]
      */
     private array $viewSourceDirectories = [];
 
-    public function __construct(string $baseDir, string $compiledDir, ?ContainerInterface $container = null, bool $isDev = true)
+    public function __construct(Config $config)
     {
-        $this->baseDir = $baseDir;
-        $this->compiledDir = $compiledDir;
-        $this->isDev = $isDev;
-        $this->container = $container;
-
-        if (!is_dir($compiledDir)) {
-            mkdir($compiledDir, 0o777, true);
+        $this->config = $config;
+        if (!is_dir($config->compiledDir)) {
+            mkdir($config->compiledDir, 0o777, true);
         }
 
-        $viewLookupFile = $compiledDir . '/' . self::VIEW_LOOKUP_FILENAME;
+        $viewLookupFile = $config->compiledDir . '/' . self::VIEW_LOOKUP_FILENAME;
         if (file_exists($viewLookupFile)) {
             $viewLookup = require $viewLookupFile;
             if (!($viewLookup instanceof ViewLookup)) {
@@ -73,11 +65,11 @@ class ViewEngine
         $oldClass = $values['class'] ?? '';
         $oldSource = $values['source'] ?? '';
 
-        if (count($values) > 0 && !$this->isDev) {
+        if (count($values) > 0 && !$this->config->isDev) {
             if ('' === $oldCompiled) {
                 require_once $oldSource;
             } else {
-                require_once $this->compiledDir . '/' . $oldCompiled;
+                require_once $this->config->compiledDir . '/' . $oldCompiled;
             }
 
             return $this->instantiateView($oldClass);
@@ -102,18 +94,18 @@ class ViewEngine
             }
             $newHash = md5($rawContent);
             if ($newSource === $oldSource && $oldHash === $newHash) {
-                require_once $this->compiledDir . '/' . $oldCompiled;
+                require_once $this->config->compiledDir . '/' . $oldCompiled;
 
                 return $this->instantiateView($oldClass);
             }
 
             $newCompiled = sprintf('%s.php', $viewName);
-            $parser = new ViewParser();
-            $newClass = $parser->parse($viewName, $rawContent, $this->compiledDir . '/' . $newCompiled);
+            $parser = new ViewParser($this);
+            $newClass = $parser->parse($viewName, $rawContent, $this->config->compiledDir . '/' . $newCompiled);
             $this->viewLookup->set($viewName, $newCompiled, $newClass, $newSource, $newHash);
         }
 
-        $this->viewLookup->export($this->compiledDir . '/' . self::VIEW_LOOKUP_FILENAME);
+        $this->viewLookup->export($this->config->compiledDir . '/' . self::VIEW_LOOKUP_FILENAME);
 
         return $this->instantiateView($newClass);
     }
@@ -121,7 +113,7 @@ class ViewEngine
     private function findViewSource(string $viewName): string
     {
         if (empty($this->viewSourceDirectories)) {
-            $toIterate = [$this->baseDir];
+            $toIterate = [$this->config->baseDir];
             while (!empty($toIterate)) {
                 $dir = array_pop($toIterate);
                 assert(is_string($dir));
@@ -131,7 +123,7 @@ class ViewEngine
                     throw new RuntimeException(sprintf('Failed to read the directory %s', $dir));
                 }
                 foreach ($subDirs as $subDir) {
-                    if ($subDir === $this->compiledDir) {
+                    if ($subDir === $this->config->compiledDir) {
                         continue;
                     }
                     $toIterate[] = $subDir;
@@ -205,10 +197,10 @@ class ViewEngine
 
     private function instantiateView(string $className): AbstractView
     {
-        if (null === $this->container) {
+        if (null === $this->config->container) {
             $instance = new $className($this);
         } else {
-            $instance = $this->container->get($className);
+            $instance = $this->config->container->get($className);
         }
         assert($instance instanceof AbstractView);
 
