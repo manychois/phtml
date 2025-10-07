@@ -163,7 +163,7 @@ class ViewParser
             throw new RuntimeException('php-view-out must be a child of a custom element.');
         } elseif ('php-var' === $element->name) {
             yield from $this->codePhpVar($element, $indent, $parentVar, $propsVar, $mainVar, $regionsVar);
-        } elseif (str_contains($element->name, ':') || str_contains($element->name, '-') || str_contains($element->name, '_')) {
+        } elseif ($this->engine->hasView($element->name)) {
             yield from $this->codeCustomElement($element, $indent, $parentVar, $propsVar, $mainVar, $regionsVar);
         } else {
             yield from $this->codeOrdinaryElement($element, $indent, $parentVar, $propsVar, $mainVar, $regionsVar);
@@ -302,13 +302,6 @@ class ViewParser
 
     private function codeCustomElement(Element $element, string $indent, string $parentVar, string $propsVar, string $mainVar, string $regionsVar): Generator
     {
-        try {
-            $this->engine->getView($element->name);
-        } catch (RuntimeException $ex) {
-            yield from $this->codeOrdinaryElement($element, $indent, $parentVar, $propsVar, $mainVar, $regionsVar);
-            return;
-        }
-
         $viewVar = self::var('view');
         $viewPropsVar = self::var('viewProps');
         $viewRegionsVar = self::var('viewRegions');

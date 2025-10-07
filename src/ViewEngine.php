@@ -20,6 +20,10 @@ class ViewEngine
      * @var string[]
      */
     private array $viewSourceDirectories = [];
+    /**
+     * @var array<string,bool>
+     */
+    private array $hasViewCache = [];
 
     public function __construct(Config $config)
     {
@@ -57,6 +61,19 @@ class ViewEngine
         append($document, $view->render($props, $main, $regions));
 
         return $document;
+    }
+
+    public function hasView(string $viewName): bool
+    {
+        if (array_key_exists($viewName, $this->hasViewCache)) {
+            return $this->hasViewCache[$viewName];
+        }
+
+        $newSource = $this->findViewSource($viewName, false);
+        $result = ('' !== $newSource);
+        $this->hasViewCache[$viewName] = $result;
+
+        return $result;
     }
 
     public function getView(string $viewName, bool $htmlFileOnly = false): AbstractView
