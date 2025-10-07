@@ -534,7 +534,7 @@ class ViewParser
                 assert(false !== $pos);
                 $expr = trim(substr($data, 0, $pos));
                 if ('' === $parentVar) {
-                    yield $indent . sprintf('yield $this->resolveInner(%s, %s, %s);', $expr, $propsVar, $regionsVar);
+                    yield $indent . sprintf('yield $this->resolveInner(%s, %s, %s, %s);', $expr, $propsVar, $mainVar, $regionsVar);
                 } else {
                     yield $indent . sprintf('$this->appendInner(%s, %s, %s, %s, %s);', $parentVar, $expr, $propsVar, $mainVar, $regionsVar);
                 }
