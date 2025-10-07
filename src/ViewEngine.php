@@ -45,21 +45,24 @@ class ViewEngine
      *
      * @param string              $viewName the name of the view to render
      * @param array<string,mixed> $props    The properties to pass to the view
+     * @param mixed               $main     The main content to pass to the view
+     * @param array<string,mixed> $regions  The regions contents to pass to the view
      *
      * @return Document The rendered view as a Document node
      */
-    public function render(string $viewName, array $props = []): Document
+    public function render(string $viewName, array $props = [], mixed $main = null, array $regions = []): Document
     {
-        $view = $this->getView($viewName);
+        $view = $this->getView($viewName, false);
         $document = Document::create();
-        append($document, $view->render($props, []));
+        append($document, $view->render($props, $main, $regions));
 
         return $document;
     }
 
-    public function getView(string $viewName): AbstractView
+    public function getView(string $viewName, bool $htmlFileOnly = false): AbstractView
     {
-        $values = $this->viewLookup->get($viewName);
+        $lookupKey = $viewName . ($htmlFileOnly ? '__html_only' : '');
+        $values = $this->viewLookup->get($lookupKey);
         $oldCompiled = $values['compiled'] ?? '';
         $oldHash = $values['hash'] ?? '';
         $oldClass = $values['class'] ?? '';
@@ -75,7 +78,7 @@ class ViewEngine
             return $this->instantiateView($oldClass);
         }
 
-        $newSource = $this->findViewSource($viewName);
+        $newSource = $this->findViewSource($viewName, $htmlFileOnly);
         if ('' === $newSource) {
             throw new RuntimeException(sprintf('View file for %s not found.', $viewName));
         }
@@ -86,7 +89,7 @@ class ViewEngine
                 $newClass = $namespace . '\\' . $newClass;
             }
             require_once $newSource;
-            $this->viewLookup->set($viewName, '', $newClass, $newSource, '');
+            $this->viewLookup->set($lookupKey, '', $newClass, $newSource, '');
         } else {
             $rawContent = file_get_contents($newSource);
             if (false === $rawContent) {
@@ -102,7 +105,8 @@ class ViewEngine
             $newCompiled = sprintf('%s.php', $viewName);
             $parser = new ViewParser($this);
             $newClass = $parser->parse($viewName, $rawContent, $this->config->compiledDir . '/' . $newCompiled);
-            $this->viewLookup->set($viewName, $newCompiled, $newClass, $newSource, $newHash);
+
+            $this->viewLookup->set($lookupKey, $newCompiled, $newClass, $newSource, $newHash);
         }
 
         $this->viewLookup->export($this->config->compiledDir . '/' . self::VIEW_LOOKUP_FILENAME);
@@ -110,7 +114,7 @@ class ViewEngine
         return $this->instantiateView($newClass);
     }
 
-    private function findViewSource(string $viewName): string
+    private function findViewSource(string $viewName, bool $htmlFileOnly): string
     {
         if (empty($this->viewSourceDirectories)) {
             $toIterate = [$this->config->baseDir];
@@ -132,9 +136,11 @@ class ViewEngine
         }
 
         foreach ($this->viewSourceDirectories as $dir) {
-            $filePath = $dir . '/' . $viewName . '.php';
-            if (file_exists($filePath)) {
-                return $filePath;
+            if (!$htmlFileOnly) {
+                $filePath = $dir . '/' . $viewName . '.php';
+                if (file_exists($filePath)) {
+                    return $filePath;
+                }
             }
             $filePath = $dir . '/' . $viewName . '.html';
             if (file_exists($filePath)) {

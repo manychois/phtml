@@ -15,6 +15,7 @@ use Manychois\Simdom\Element;
 use Manychois\Simdom\Fragment;
 use Manychois\Simdom\Internal\DefaultHtmlSerialiser;
 use Manychois\Simdom\Text;
+use ReflectionClass;
 
 abstract class AbstractView
 {
@@ -61,6 +62,24 @@ abstract class AbstractView
         }
 
         return $fragment;
+    }
+
+    /**
+     * Render the view based on the corresponding HTML file and return as a single node.
+     *
+     * @param array<string,mixed> $props   The properties to pass to the view
+     * @param mixed|null          $main    The main content to pass to the view
+     * @param array<string,mixed> $regions The regions contents to pass to the view
+     *
+     * @return AbstractNode The rendered view as a single node
+     */
+    final protected function fromHtmlView(array $props = [], mixed $main = null, array $regions = []): AbstractNode
+    {
+        $classFile = new ReflectionClass($this)->getFileName();
+        assert(false !== $classFile);
+        $htmlView = $this->engine->getView(basename($classFile, '.php'), true);
+
+        return $htmlView->renderAsNode($props, $main, $regions);
     }
 
     final protected static function newId(string $prefix = 'id-'): string

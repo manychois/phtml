@@ -22,9 +22,9 @@ class ViewLookup
      */
     private array $lookup = [];
 
-    public function set(string $viewName, string $compiled, string $class, string $sourcePath, string $hash): void
+    public function set(string $key, string $compiled, string $class, string $sourcePath, string $hash): void
     {
-        $this->lookup[$viewName] = [
+        $this->lookup[$key] = [
             'compiled' => $compiled,
             'class' => $class,
             'source' => $sourcePath,
@@ -35,9 +35,9 @@ class ViewLookup
     /**
      * @return array<string,string>
      */
-    public function get(string $viewName): array
+    public function get(string $key): array
     {
-        return $this->lookup[$viewName] ?? [];
+        return $this->lookup[$key] ?? [];
     }
 
     public function export(string $filePath): void

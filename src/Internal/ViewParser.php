@@ -46,7 +46,7 @@ class ViewParser
         $fragment = $htmlParser->parseFragment($source);
         foreach ($fragment->descendants() as $child) {
             if ($child instanceof Text) {
-                if (trim($child->data) === '') {
+                if ('' === trim($child->data)) {
                     if (str_contains($child->data, "\n")) {
                         $child->data = "\n";
                     } else {
