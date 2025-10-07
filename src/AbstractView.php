@@ -179,7 +179,7 @@ abstract class AbstractView
      *
      * @return Generator<int,Doctype|Element|Text|Comment>
      */
-    private function resolveInner(mixed $value, array $props, mixed $main, array $regions): Generator
+    protected function resolveInner(mixed $value, array $props, mixed $main, array $regions): Generator
     {
         if (null === $value) {
             return false;
