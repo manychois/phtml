@@ -121,13 +121,13 @@ class ViewParser
     private function codeDoctype(Doctype $doctype, string $indent, string $parentVar, string $propsVar, string $mainVar, string $regionsVar): Generator
     {
         $code = sprintf(
-            'Doctype::𝑖𝑛𝑡𝑒𝑟𝑛𝑎𝑙Create(%s, %s, %s);',
+            'Doctype::𝑖𝑛𝑡𝑒𝑟𝑛𝑎𝑙Create(%s, %s, %s)',
             $this->toPhpLiteral($doctype->name),
             $this->toPhpLiteral($doctype->publicId),
             $this->toPhpLiteral($doctype->systemId),
         );
         if ('' === $parentVar) {
-            yield $indent . 'yield ' . $code;
+            yield $indent . sprintf('yield %s;', $code);
         } else {
             yield $indent . sprintf('%s->childNodes->𝑖𝑛𝑡𝑒𝑟𝑛𝑎𝑙Append(%s);', $parentVar, $code);
         }
@@ -140,7 +140,7 @@ class ViewParser
             $this->toPhpLiteral($comment->data),
         );
         if ('' === $parentVar) {
-            yield $indent . 'yield ' . $code;
+            yield $indent . sprintf('yield %s;', $code);
         } else {
             yield $indent . sprintf('%s->childNodes->𝑖𝑛𝑡𝑒𝑟𝑛𝑎𝑙Append(%s);', $parentVar, $code);
         }
