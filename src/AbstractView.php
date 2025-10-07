@@ -52,7 +52,9 @@ abstract class AbstractView
     {
         $fragment = Fragment::create();
         $result = $this->render($props, $main, $regions);
-        $this->appendInner($fragment, $result, $props, $main, $regions);
+        foreach ($result as $node) {
+            $fragment->appendChild($node);
+        }
         if (1 === $fragment->childNodes->count()) {
             $onlyChild = $fragment->firstChild;
             assert(null !== $onlyChild);

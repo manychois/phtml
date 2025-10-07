@@ -245,7 +245,7 @@ class ViewParser
             yield $indent . '    ' . sprintf('yield %s;', $elementVar);
             yield $indent . '}';
         } else {
-            yield $indent . sprintf('$this->appendInner(%s, %s, %s, %s, %s);', $parentVar, $elementVar, $propsVar, $mainVar, $regionsVar);
+            yield $indent . sprintf('%s->appendChild(%s);', $parentVar, $elementVar);
         }
     }
 
@@ -407,7 +407,10 @@ class ViewParser
         if ('' === $parentVar) {
             yield $indent . sprintf('yield from %s->render(%s, %s, %s);', $viewVar, $viewPropsVar, $viewMainVar, $viewRegionsVar);
         } else {
-            yield $indent . sprintf('$this->appendInner(%s, %s->render(%s, %s, %s), %s, %s, %s);', $parentVar, $viewVar, $viewPropsVar, $viewMainVar, $viewRegionsVar, $propsVar, $mainVar, $regionsVar);
+            $tempNodeVar = self::var('tempNode');
+            yield $indent . sprintf('foreach (%s->render(%s, %s, %s) as %s) {', $viewVar, $viewPropsVar, $viewMainVar, $viewRegionsVar, $tempNodeVar);
+            yield $indent . '    ' . sprintf('%s->appendChild(%s);', $parentVar, $tempNodeVar);
+            yield $indent . '}';
         }
     }
 
@@ -435,7 +438,10 @@ class ViewParser
             if ('' === $parentVar) {
                 yield $indent . sprintf('yield from %s;', $code);
             } else {
-                yield $indent . sprintf('$this->appendInner(%s, %s, %s, %s, %s);', $parentVar, $code, $propsVar, $mainVar, $regionsVar);
+                $tempNodeVar = self::var('tempNode');
+                yield $indent . sprintf('foreach (%s as %s) {', $code, $tempNodeVar);
+                yield $indent . '    ' . sprintf('%s->appendChild(%s);', $parentVar, $tempNodeVar);
+                yield $indent . '}';
             }
         }
     }
