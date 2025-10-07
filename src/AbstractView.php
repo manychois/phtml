@@ -185,7 +185,7 @@ abstract class AbstractView
             return false;
         }
 
-        if ($value instanceof Doctype || $value instanceof Element || $value instanceof Text || $value instanceof Comment) {
+        if (self::isRealNode($value)) {
             yield $value;
 
             return true;
@@ -210,26 +210,41 @@ abstract class AbstractView
 
         if (is_iterable($value)) {
             $i = 0;
-            $hasContent = false;
             foreach ($value as $item) {
+                if (self::isRealNode($item)) {
+                    yield $i => $item;
+                    ++$i;
+                    continue;
+                }
                 foreach ($this->resolveInner($item, $props, $main, $regions) as $node) {
                     yield $i => $node;
                     ++$i;
-                    $hasContent = true;
                 }
             }
 
-            return $hasContent;
+            return $i > 0;
         }
 
         if (is_callable($value)) {
             $result = $value($props, $main, $regions);
+            if (self::isRealNode($result)) {
+                yield $result;
+                return true;
+            }
+            
             $generator = $this->resolveInner($result, $props, $main, $regions);
             yield from $generator;
-
             return $generator->getReturn();
         }
 
         throw new InvalidArgumentException('Unsupported value type: ' . get_debug_type($value));
+    }
+
+    private static function isRealNode(mixed $value): bool
+    {
+        return $value instanceof Doctype
+            || $value instanceof Element
+            || $value instanceof Text
+            || $value instanceof Comment;
     }
 }
