@@ -46,7 +46,8 @@ abstract class AbstractView
      * @param mixed|null          $main    The main content to pass to the view
      * @param array<string,mixed> $regions The regions contents to pass to the view
      *
-     * @throws InvalidArgumentException
+     * @return AbstractNode The rendered view as a single node.
+     *                      If nothing is rendered, an empty Fragment is returned.
      */
     final public function renderAsNode(array $props = [], mixed $main = null, array $regions = []): AbstractNode
     {
@@ -115,23 +116,22 @@ abstract class AbstractView
     {
         if (isset($regions[$name])) {
             $region = $regions[$name];
-            yield from $this->resolveInner($region, $props, $main, $regions);
+            yield from $this->resolveInner($region, $props);
         } elseif ('' === $name) {
-            yield from $this->resolveInner($main, $props, $main, $regions);
+            yield from $this->resolveInner($main, $props);
         }
     }
 
     /**
      * Append resolved nodes to a parent node.
      *
-     * @param AbstractParentNode  $parent  The parent node to append to
-     * @param mixed               $value   The value to resolve and append
-     * @param array<string,mixed> $props   The properties to pass to $value if it's a callable
-     * @param array<string,mixed> $regions The regions callables to pass to $value if it's a callable
+     * @param AbstractParentNode  $parent The parent node to append to
+     * @param mixed               $value  The value to resolve and append
+     * @param array<string,mixed> $props  The properties to pass to $value if it's a callable
      */
-    final protected function appendInner(AbstractParentNode $parent, mixed $value, array $props, mixed $main, array $regions): void
+    final protected function appendInner(AbstractParentNode $parent, mixed $value, array $props): void
     {
-        foreach ($this->resolveInner($value, $props, $main, $regions) as $node) {
+        foreach ($this->resolveInner($value, $props) as $node) {
             $parent->appendChild($node);
         }
     }
@@ -140,7 +140,7 @@ abstract class AbstractView
     {
         if (in_array($name, DefaultHtmlSerialiser::BOOLEAN_ATTRIBUTES)) {
             if ($value) {
-                $element->𝑖𝑛𝑡𝑒𝑟𝑛𝑎𝑙SetAttr($name, '');
+                $element->setAttr($name, '');
             } else {
                 $element->removeAttr($name);
             }
@@ -163,7 +163,7 @@ abstract class AbstractView
             if (!is_string($value)) {
                 $value = strval($value);
             }
-            $element->𝑖𝑛𝑡𝑒𝑟𝑛𝑎𝑙SetAttr($name, $append ? $old . $value : $value);
+            $element->setAttr($name, $append ? $old . $value : $value);
 
             return;
         }
@@ -174,14 +174,12 @@ abstract class AbstractView
     /**
      * Recursively resolve a value into nodes.
      *
-     * @param mixed               $value   The value to resolve
-     * @param array<string,mixed> $props   The properties to pass to $value if it's a callable
-     * @param mixed               $main    The main content to pass to $value if it's a callable
-     * @param array<string,mixed> $regions The regions callables to pass to $value if it's a callable
+     * @param mixed               $value The value to resolve
+     * @param array<string,mixed> $props The properties to pass to $value if it's a callable
      *
      * @return Generator<int,Doctype|Element|Text|Comment>
      */
-    protected function resolveInner(mixed $value, array $props, mixed $main, array $regions): Generator
+    protected function resolveInner(mixed $value, array $props): Generator
     {
         if (null === $value) {
             return false;
@@ -218,7 +216,7 @@ abstract class AbstractView
                     ++$i;
                     continue;
                 }
-                foreach ($this->resolveInner($item, $props, $main, $regions) as $node) {
+                foreach ($this->resolveInner($item, $props) as $node) {
                     yield $i => $node;
                     ++$i;
                 }
@@ -228,20 +226,25 @@ abstract class AbstractView
         }
 
         if (is_callable($value)) {
-            $result = $value($props, $main, $regions);
+            $result = $value($props);
             if (self::isRealNode($result)) {
                 yield $result;
+
                 return true;
             }
-            
-            $generator = $this->resolveInner($result, $props, $main, $regions);
+
+            $generator = $this->resolveInner($result, $props);
             yield from $generator;
+
             return $generator->getReturn();
         }
 
         throw new InvalidArgumentException('Unsupported value type: ' . get_debug_type($value));
     }
 
+    /**
+     * @phpstan-assert-if-true Doctype|Element|Text|Comment $value
+     */
     private static function isRealNode(mixed $value): bool
     {
         return $value instanceof Doctype

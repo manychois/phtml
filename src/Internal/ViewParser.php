@@ -108,7 +108,7 @@ class ViewParser
             yield from $this->codeElement($node, $indent, $parentVar, $propsVar, $mainVar, $regionsVar);
         }
         if ($node instanceof Text) {
-            yield from $this->codeText($node, $indent, $parentVar, $propsVar, $mainVar, $regionsVar);
+            yield from $this->codeText($node, $indent, $parentVar, $propsVar);
         }
         if ($node instanceof Comment) {
             yield from $this->codeComment($node, $indent, $parentVar, $propsVar, $mainVar, $regionsVar);
@@ -389,12 +389,12 @@ class ViewParser
             }
             if ('' === $name) {
                 $hasViewMain = true;
-                yield $indent . sprintf('%s = function (array $props, mixed $main, array $regions): Generator {', $viewMainVar);
+                yield $indent . sprintf('%s = function (array $props) use ($main, $regions): Generator {', $viewMainVar);
                 yield $indent . '    extract($props, \EXTR_SKIP);';
                 yield from $this->codeChildNodes($fragment, $indent . '    ', '', '$props', '$main', '$regions');
                 yield $indent . '};';
             } else {
-                yield $indent . sprintf('%s[\'%s\'] = function (array $props, mixed $main, array $regions): Generator {', $viewRegionsVar, $name);
+                yield $indent . sprintf('%s[%s] = function (array $props) use ($main, $regions): Generator {', $viewRegionsVar, $this->toPhpLiteral($name));
                 yield $indent . '    extract($props, \EXTR_SKIP);';
                 yield from $this->codeChildNodes($fragment, $indent . '    ', '', '$props', '$main', '$regions');
                 yield $indent . '};';
@@ -419,19 +419,15 @@ class ViewParser
         $name = $element->getAttr('name') ?? '';
         $code = sprintf('$this->renderRegion(%s, %s, %s, %s)', $this->toPhpLiteral($name), $propsVar, $mainVar, $regionsVar);
         if ($element->childNodes->count() > 0) {
-            $hasRegionVar = self::var('hasRegion');
-            yield $indent . sprintf('%s = false;', $hasRegionVar);
-            $nodeVar = self::var('node');
-            yield $indent . sprintf('foreach (%s as %s) {', $code, $nodeVar);
-            yield $indent . sprintf('    %s = true;', $hasRegionVar);
+            $regionContentVar = self::var('regionContent');
+            yield $indent . sprintf('%s = iterator_to_array(%s, false);', $regionContentVar, $code);
+            yield $indent . sprintf('if (count(%s) > 0) {', $regionContentVar);
             if ('' !== $parentVar) {
-                yield $indent . sprintf('    %s->childNodes->𝑖𝑛𝑡𝑒𝑟𝑛𝑎𝑙Append(%s);', $parentVar, $nodeVar);
+                yield $indent . sprintf('    %s->append(...%s);', $parentVar, $regionContentVar);
             } else {
-                yield $indent . sprintf('    yield %s;', $nodeVar);
+                yield $indent . sprintf('    yield from %s;', $regionContentVar);
             }
-            yield $indent . '}';
-
-            yield $indent . sprintf('if (!%s) {', $hasRegionVar);
+            yield $indent . '} else {';
             yield from $this->codeChildNodes($element, $indent . '    ', $parentVar, $propsVar, $mainVar, $regionsVar);
             yield $indent . '}';
         } else {
@@ -517,7 +513,7 @@ class ViewParser
         }
     }
 
-    private function codeText(Text $text, string $indent, string $parentVar, string $propsVar, string $mainVar, string $regionsVar): Generator
+    private function codeText(Text $text, string $indent, string $parentVar, string $propsVar): Generator
     {
         $data = $text->data;
         while ('' !== $data) {
@@ -540,9 +536,9 @@ class ViewParser
                 assert(false !== $pos);
                 $expr = trim(substr($data, 0, $pos));
                 if ('' === $parentVar) {
-                    yield $indent . sprintf('yield $this->resolveInner(%s, %s, %s, %s);', $expr, $propsVar, $mainVar, $regionsVar);
+                    yield $indent . sprintf('yield from $this->resolveInner(%s, %s);', $expr, $propsVar);
                 } else {
-                    yield $indent . sprintf('$this->appendInner(%s, %s, %s, %s, %s);', $parentVar, $expr, $propsVar, $mainVar, $regionsVar);
+                    yield $indent . sprintf('$this->appendInner(%s, %s, %s);', $parentVar, $expr, $propsVar);
                 }
 
                 $data = substr($data, $pos + 2);
